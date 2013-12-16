@@ -4,7 +4,7 @@ drop temporary table if exists ENO_fixversions;
 
 
 # Issues with sums of estimate fields
-CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (select ji.id, ji.pkey, ji.summary, issuestatus.pname, cfTeam.customvalue as Team, ji.created, ji.updated, sumfifty.sum50, sumseventy.sum70, storypoints.numbervalue as storypoints
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (select ji.id, ji.pkey, ji.summary, issuestatus.pname, cfTeam.customvalue as Team, cfBucket.customvalue as Bucket, cfHold.customvalue as onHold, ji.created, ji.updated, sumfifty.sum50, sumseventy.sum70, storypoints.numbervalue as storypoints
 	from (
 		jiraissue ji left join (select * from customfieldvalue where customfield = 10002) storypoints on storypoints.issue = ji.id
 		) left join (
@@ -27,6 +27,14 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (select ji.id, ji.pke
 			select customfieldvalue.issue, customfieldoption.customvalue 
 				from customfieldvalue inner join customfieldoption on customfieldoption.id = customfieldvalue.STRINGVALUE
 				where customfieldvalue.customfield=10024) as cfTeam on cfTeam.issue = ji.id 
+		left join (
+			select customfieldvalue.issue, customfieldoption.customvalue 
+				from customfieldvalue inner join customfieldoption on customfieldoption.id = customfieldvalue.STRINGVALUE
+				where customfieldvalue.customfield=12558) as cfBucket on cfBucket.issue = ji.id 
+		left join (
+			select customfieldvalue.issue, customfieldoption.customvalue 
+				from customfieldvalue inner join customfieldoption on customfieldoption.id = customfieldvalue.STRINGVALUE
+				where customfieldvalue.customfield=10067) as cfHold on cfHold.issue = ji.id 
 		where ji.project = 10002 
 			and ji.issuetype = 5
 			#and sum50 is not null
@@ -88,28 +96,83 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_fixversions AS (select ji.id, ji.pkey, 
 	where ji.project = 10002 and ji.issuetype = 5
 ); 
 
+#Timestamps of phase ends --------------------------------------------------------------------------------
+drop temporary table if exists ENO_endspecphase;
+drop temporary table if exists ENO_endprepphase;
+drop temporary table if exists ENO_endreadyphase;
+
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_endspecphase AS (select ji.id, ji.pkey, q1.* from jiraissue ji inner join (
+select issueid, max(created) as endspec, OLDSTRING, NEWSTRING from changegroup 
+	inner join changeitem on changegroup.id = changeitem.groupid
+	where field = 'status' 
+	and OLDSTRING = 'Specification'
+	and NEWSTRING = 'Preparing'
+	#group by issueid, newvalue
+	group by issueid
+	order by issueid ) as q1 on ji.id = q1.issueid
+	where ji.issuetype = 5 and ji.project = 10002);
+
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_endprepphase AS (select ji.id, q1.* from jiraissue ji inner join (
+select issueid, max(created) as endprep, OLDSTRING, NEWSTRING from changegroup 
+	inner join changeitem on changegroup.id = changeitem.groupid
+	where field = 'status' 
+	and OLDSTRING = 'Preparing'
+	and NEWSTRING = 'Ready'
+	#group by issueid, newvalue
+	group by issueid
+	order by issueid ) as q1 on ji.id = q1.issueid
+	where ji.issuetype = 5 and ji.project = 10002);
+
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_endreadyphase AS (select ji.id, q1.* from jiraissue ji inner join (
+select issueid, max(created) as endready, OLDSTRING, NEWSTRING from changegroup 
+	inner join changeitem on changegroup.id = changeitem.groupid
+	where field = 'status' 
+	and OLDSTRING = 'Ready'
+	and NEWSTRING = 'Plan'
+	#group by issueid, newvalue
+	group by issueid
+	order by issueid ) as q1 on ji.id = q1.issueid
+	where ji.issuetype = 5 and ji.project = 10002);
+
 
 select 
 	   e.pkey as 'Epic',
        e.summary as 'Summary',
        e.pname as 'Status', 
        group_concat(e.Team separator ', ') as 'Team(s)',
-	   e.created as dataCreated,
-       e.updated as dateUpdated, 
+	   e.Bucket as Bucket,
+	   e.onHold as 'On Hold',
+	   e.created as dateCreated,
+	   CONCAT(YEAR(e.created), ".", WEEKOFYEAR(e.created)) as weekCreated,
+       e.updated as dateUpdated,
+	   CONCAT(YEAR(e.updated), ".", WEEKOFYEAR(e.updated)) as weekUpdated, 
        e.sum50 as 'Sum of 50%', 
        e.sum70 as 'Sum of 70%', 
-       e.storypoints as 'Story Points', 
+       e.storypoints as 'Story Points',
+	   (e.storypoints * 11 / 8) as 'Converted Points',
+	   if (e.sum50 is not null and e.sum70 is not null, e.sum70 - e.sum50, null) as delta5070,
+	   if (e.sum70 is not null and e.storypoints is not null,  (e.storypoints * 11 / 8) - e.sum70, if (e.sum50 is not null and e.storypoints is not null,  (e.storypoints * 11 / 8) - e.sum50, null)) as deltapp,
        s.maxStamp50 as 'Timestamp 50%', 
        s.maxStamp70 as 'Timestamp 70%',
 	   s.maxStampStoryPoints as 'Timestamp Poker',
 	   f.demandfix as 'Demanded Fix',
 	   f.planfix as 'Planned Fix', 
-       f.fixversion as 'Fix Version'
+       f.fixversion as 'Fix Version',
+       if(f.fixversion is not null, f.fixversion, if(f.planfix is not null, f.planfix, f.demandfix)) as 'Sprint assignment',
+	   espec.endspec as 'End of Specification',
+       CONCAT(YEAR(espec.endspec), ".", WEEKOFYEAR(espec.endspec)) as weekEndSpec,
+	   eprep.endprep as 'End of Preparation',
+	   CONCAT(YEAR(eprep.endprep), ".", WEEKOFYEAR(eprep.endprep)) as weekEndPrep,
+	   eready.endready as 'End of Ready',
+       CONCAT(YEAR(eready.endready), ".", WEEKOFYEAR(eready.endready)) as weekEndReady
 	from ENO_issueEstimates e 
 		inner join ENO_estimateStamps s 
 		on e.id = s.id 
 		inner join ENO_fixversions f
 		on e.id = f.id
+		left join ENO_endspecphase espec on e.id = espec.id
+		left join ENO_endprepphase eprep on e.id = eprep.id
+		left join ENO_endreadyphase eready on e.id = eready.id
 	#where demandfix is null
 	#and e.pname != "Closed" and e.pname != "Resolved" and e.pname != "Open" and e.pname != "Regression Test"
 	#where planfix = "Sprint 55"

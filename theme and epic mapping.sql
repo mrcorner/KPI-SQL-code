@@ -1,11 +1,6 @@
 drop temporary table if exists ENO_parentlinks;
 
-CREATE TEMPORARY TABLE IF NOT EXISTS ENO_parentlinks AS (
-	select 
 
-
-
-);
 
  select * from issuestatus;
 
