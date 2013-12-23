@@ -1,9 +1,8 @@
-drop temporary table if exists ENO_issueEstimates;
-drop temporary table if exists ENO_estimateStamps;
-drop temporary table if exists ENO_fixversions;
-
+#changelog
+#20131219 added label field
 
 # Issues with sums of estimate fields
+drop temporary table if exists ENO_issueEstimates;
 CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (select ji.id, ji.pkey, ji.summary, issuestatus.pname, cfTeam.customvalue as Team, cfBucket.customvalue as Bucket, cfHold.customvalue as onHold, ji.created, ji.updated, sumfifty.sum50, sumseventy.sum70, storypoints.numbervalue as storypoints
 	from (
 		jiraissue ji left join (select * from customfieldvalue where customfield = 10002) storypoints on storypoints.issue = ji.id
@@ -43,6 +42,7 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (select ji.id, ji.pke
 );
 
 #Timestamps of estimate updates
+drop temporary table if exists ENO_estimateStamps;
 CREATE TEMPORARY TABLE IF NOT EXISTS ENO_estimateStamps AS (select ji.id, ji.pkey, ji.summary, q1.*, q2.maxStamp50, q2.NEWSTRING as latest50, q3.maxStamp70, q3.NEWSTRING as latest70 from jiraissue ji left join (
 	select issueid, author, max(created) as maxStampStoryPoints, NEWSTRING from changegroup 
 		inner join changeitem on changegroup.id = changeitem.groupid
@@ -64,7 +64,19 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_estimateStamps AS (select ji.id, ji.pke
 	where ji.issuetype = 5  and ji.project = 10002
 );
 
-CREATE TEMPORARY TABLE IF NOT EXISTS ENO_fixversions AS (select ji.id, ji.pkey, ji.summary, pv1.vname as demandfix, pv2.vname as planfix, q3.vname as fixversion from 
+drop temporary table if exists ENO_maxfixversions;
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_maxfixversions (select fv.id, projectversion.vname from (select ji.id, max(projectversion.id) as maxpvid from jiraissue ji
+		left join nodeassociation on source_node_id = ji.id
+		left join projectversion on projectversion.id = nodeassociation.sink_node_id
+		where nodeassociation.ASSOCIATION_TYPE = 'IssueFixVersion'
+		and ji.project = 10002
+		and ji.issuetype = 5
+		and projectversion.vname not like '%ear%'
+		group by ji.id
+	) as fv inner join projectversion on fv.maxpvid = projectversion.id);
+
+drop temporary table if exists ENO_fixversions;
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_fixversions AS (select ji.id, ji.pkey, ji.summary, pv1.vname as demandfix, pv2.vname as planfix, ENO_maxfixversions.vname as fixversion from 
 	jiraissue ji left join
 	(select ji.id, ji.pkey, ji.summary, max(cfv.numbervalue) as nvalue
 		from jiraissue ji 
@@ -79,28 +91,15 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_fixversions AS (select ji.id, ji.pkey, 
 		where cfv.customfield = 11232 
 			and cfv.numbervalue not in (select id from projectversion where project = 10002 and vname like '%ear%') 
 			group by ji.id
-	) as q2 on q1.id = q2.id
+	) as q2 on ji.id = q2.id
 		left join projectversion pv1 on q1.nvalue = pv1.id
 		left join projectversion pv2 on q2.nvalue = pv2.id
-	left join (
-	SELECT jiraissue.id, max(projectversion.id) as pvid, vname
-		FROM projectversion,
-		nodeassociation,
-		jiraissue
-		WHERE ASSOCIATION_TYPE = 'IssueFixVersion'
-		AND SINK_NODE_ID = projectversion.id
-		AND SOURCE_NODE_ID = jiraissue.id
-		and projectversion.vname not like '%ear%'
-		group by jiraissue.id
-	) as q3 on q1.id = q3.id
+	left join ENO_maxfixversions on ji.id = ENO_maxfixversions.id
 	where ji.project = 10002 and ji.issuetype = 5
 ); 
 
 #Timestamps of phase ends --------------------------------------------------------------------------------
 drop temporary table if exists ENO_endspecphase;
-drop temporary table if exists ENO_endprepphase;
-drop temporary table if exists ENO_endreadyphase;
-
 CREATE TEMPORARY TABLE IF NOT EXISTS ENO_endspecphase AS (select ji.id, ji.pkey, q1.* from jiraissue ji inner join (
 select issueid, max(created) as endspec, OLDSTRING, NEWSTRING from changegroup 
 	inner join changeitem on changegroup.id = changeitem.groupid
@@ -112,6 +111,7 @@ select issueid, max(created) as endspec, OLDSTRING, NEWSTRING from changegroup
 	order by issueid ) as q1 on ji.id = q1.issueid
 	where ji.issuetype = 5 and ji.project = 10002);
 
+drop temporary table if exists ENO_endprepphase;
 CREATE TEMPORARY TABLE IF NOT EXISTS ENO_endprepphase AS (select ji.id, q1.* from jiraissue ji inner join (
 select issueid, max(created) as endprep, OLDSTRING, NEWSTRING from changegroup 
 	inner join changeitem on changegroup.id = changeitem.groupid
@@ -123,6 +123,7 @@ select issueid, max(created) as endprep, OLDSTRING, NEWSTRING from changegroup
 	order by issueid ) as q1 on ji.id = q1.issueid
 	where ji.issuetype = 5 and ji.project = 10002);
 
+drop temporary table if exists ENO_endreadyphase;
 CREATE TEMPORARY TABLE IF NOT EXISTS ENO_endreadyphase AS (select ji.id, q1.* from jiraissue ji inner join (
 select issueid, max(created) as endready, OLDSTRING, NEWSTRING from changegroup 
 	inner join changeitem on changegroup.id = changeitem.groupid
@@ -134,6 +135,13 @@ select issueid, max(created) as endready, OLDSTRING, NEWSTRING from changegroup
 	order by issueid ) as q1 on ji.id = q1.issueid
 	where ji.issuetype = 5 and ji.project = 10002);
 
+#retrieve labels
+drop temporary table if exists ENO_issuelabels;
+create temporary table if not exists ENO_issuelabels as (select ji.id, ji.pkey, group_concat(label.label separator ', ') as labels from jiraissue ji left join label  on ji.id = label.issue
+	where ji.project = 10002 and ji.issuetype = 5
+	group by ji.id);
+#select * from ENO_issuelabels;
+
 
 select 
 	   e.pkey as 'Epic',
@@ -141,6 +149,7 @@ select
        e.pname as 'Status', 
        group_concat(e.Team separator ', ') as 'Team(s)',
 	   e.Bucket as Bucket,
+	   elabels.labels as 'Labels',
 	   e.onHold as 'On Hold',
 	   e.created as dateCreated,
 	   CONCAT(YEAR(e.created), ".", WEEKOFYEAR(e.created)) as weekCreated,
@@ -150,6 +159,8 @@ select
        e.sum70 as 'Sum of 70%', 
        e.storypoints as 'Story Points',
 	   (e.storypoints * 11 / 8) as 'Converted Points',
+	   if (e.storypoints is not null, e.storypoints * 11 / 8, if (e.sum70 is not null, e.sum70, e.sum50)) as bestEstimate,
+	   if (e.storypoints is not null, "Poker", if (e.sum70 is not null, "70Percent", if(e.sum50 is not null, "50Percent", "None"))) as bestEstimateSource,
 	   if (e.sum50 is not null and e.sum70 is not null, e.sum70 - e.sum50, null) as delta5070,
 	   if (e.sum70 is not null and e.storypoints is not null,  (e.storypoints * 11 / 8) - e.sum70, if (e.sum50 is not null and e.storypoints is not null,  (e.storypoints * 11 / 8) - e.sum50, null)) as deltapp,
        s.maxStamp50 as 'Timestamp 50%', 
@@ -158,13 +169,14 @@ select
 	   f.demandfix as 'Demanded Fix',
 	   f.planfix as 'Planned Fix', 
        f.fixversion as 'Fix Version',
-       if(f.fixversion is not null, f.fixversion, if(f.planfix is not null, f.planfix, f.demandfix)) as 'Sprint assignment',
+       if(f.fixversion is not null, f.fixversion, if(f.planfix is not null, f.planfix, if(f.demandfix is not null, f.demandfix, "No Sprint"))) as 'Sprint assignment',
 	   espec.endspec as 'End of Specification',
        CONCAT(YEAR(espec.endspec), ".", WEEKOFYEAR(espec.endspec)) as weekEndSpec,
 	   eprep.endprep as 'End of Preparation',
 	   CONCAT(YEAR(eprep.endprep), ".", WEEKOFYEAR(eprep.endprep)) as weekEndPrep,
 	   eready.endready as 'End of Ready',
        CONCAT(YEAR(eready.endready), ".", WEEKOFYEAR(eready.endready)) as weekEndReady
+	   
 	from ENO_issueEstimates e 
 		inner join ENO_estimateStamps s 
 		on e.id = s.id 
@@ -173,6 +185,7 @@ select
 		left join ENO_endspecphase espec on e.id = espec.id
 		left join ENO_endprepphase eprep on e.id = eprep.id
 		left join ENO_endreadyphase eready on e.id = eready.id
+		left join ENO_issuelabels elabels on e.id = elabels.id		
 	#where demandfix is null
 	#and e.pname != "Closed" and e.pname != "Resolved" and e.pname != "Open" and e.pname != "Regression Test"
 	#where planfix = "Sprint 55"
