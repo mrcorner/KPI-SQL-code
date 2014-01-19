@@ -1,3 +1,33 @@
+#20131224
+
+
+
+
+#20131223
+
+explain select ji.id, 
+		   ji.pkey, 
+		   issuestatus.pname as currentstatus,
+		   ji.created as epiccreated,
+           cfHold.customvalue as onHold,
+           ch.author, 
+           ch.created, 
+           ch.OLDSTRING, 
+           ch.NEWSTRING
+		   
+	from jiraissue ji inner join (select issueid, author, created, OLDSTRING, NEWSTRING from changegroup 
+		inner join changeitem on changegroup.id = changeitem.groupid
+		where field = 'status') as ch on ch.issueid = ji.id
+        inner join issuestatus on ji.issuestatus = issuestatus.id
+		left join (
+			select customfieldvalue.issue, customfieldoption.customvalue 
+				from customfieldvalue inner join customfieldoption on customfieldoption.id = customfieldvalue.STRINGVALUE
+				where customfieldvalue.customfield=10067) as cfHold on cfHold.issue = ji.id 
+	where ji.project = 10002 and ji.issuetype = 5
+    order by ji.id, created;
+
+
+
 #20131219
 
 select * from label;
@@ -55,37 +85,4 @@ select fv.id, projectversion.vname from (select ji.id, max(projectversion.id) as
 	and projectversion.vname not like '%ear%'
 	and ji.id = 32665) as fv inner join projectversion on fv.maxpvid = projectversion.id
 ;
-
-select ji.id, ji.pkey, ji.summary, pv1.vname as demandfix, pv2.vname as planfix, q3.vname as fixversion from 
-	jiraissue ji left join
-	(select ji.id, ji.pkey, ji.summary, max(cfv.numbervalue) as nvalue
-		from jiraissue ji 
-		left join customfieldvalue cfv on cfv.issue = ji.id 
-		where cfv.customfield = 11130
-			and cfv.numbervalue not in (select id from projectversion where project = 10002 and vname like '%ear%')
-			group by ji.id
-	) as q1 on ji.id = q1.id left join
-	(select ji.id, max(cfv.numbervalue) as nvalue
-		from jiraissue ji 
-		left join customfieldvalue cfv on cfv.issue = ji.id 
-		where cfv.customfield = 11232 
-			and cfv.numbervalue not in (select id from projectversion where project = 10002 and vname like '%ear%') 
-			group by ji.id
-	) as q2 on q1.id = q2.id
-		left join projectversion pv1 on q1.nvalue = pv1.id
-		left join projectversion pv2 on q2.nvalue = pv2.id
-	left join (
-	select fv.id, projectversion.vname from (select ji.id, max(projectversion.id) as maxpvid from jiraissue ji
-		left join nodeassociation on source_node_id = ji.id
-		left join projectversion on projectversion.id = nodeassociation.sink_node_id
-		where nodeassociation.ASSOCIATION_TYPE = 'IssueFixVersion'
-		and projectversion.vname not like '%ear%'
-		group by ji.id
-	) as fv inner join projectversion on fv.maxpvid = projectversion.id) as q3 on q1.id = q3.id
-	where ji.project = 10002 and ji.issuetype = 5 
-; 
-	
- limit 100000;
-
-
 

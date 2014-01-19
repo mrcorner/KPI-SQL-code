@@ -27,6 +27,6 @@ select issueid, author, created as mcreated, OLDVALUE, OLDSTRING, NEWVALUE, NEWS
 	#group by issueid, newvalue
 	order by issueid, created ) as statuschanges on ji.id = statuschanges.issueid
     inner join issuestatus on ji.issuestatus = issuestatus.id
-	where ji.issuetype = 5 and ji.project = 10002 and ji.created > '2013-01-01'
+	where ji.issuetype = 5 and ji.project = 10002 and ji.created > '2012-01-01'
 	LIMIT 20000;
 		
