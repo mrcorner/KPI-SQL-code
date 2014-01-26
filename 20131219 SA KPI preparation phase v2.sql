@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS ENO_statuschangetimes AS (select sc.id,
     sc.firstchange,
     if(sc.statusend is not null,
         datediff(sc.statusend, sc.statusbegin),
-        datediff('2014-01-10', sc.statusbegin)) as timeinthisstatus,
+        datediff('2014-01-20', sc.statusbegin)) as timeinthisstatus,
     if(sc.statusbegin = sc.firstchange,
         datediff(sc.firstchange, sc.epiccreated),
         null) as timeinfirststatus from
