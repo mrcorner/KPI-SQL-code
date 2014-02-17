@@ -24,7 +24,8 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (
 		sumfifty.sum50, 
 		sumseventy.sum70, 
 		storypoints.numbervalue as storypoints, 
-		solutionarchitect.stringvalue as solutionarchitect
+		solutionarchitect.stringvalue as solutionarchitect,
+		bse.stringvalue as bse
 	from (
 		jiraissue ji left join (
 			select * from customfieldvalue where customfield = 10002) storypoints on storypoints.issue = ji.id
@@ -38,6 +39,8 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (
 		) as sumfifty on sumfifty.issue = ji.id
 		left join (
 			select * from customfieldvalue where customfield = 10114) solutionarchitect on solutionarchitect.issue = ji.id
+		left join (
+			select * from customfieldvalue where customfield = 10014) bse on bse.issue = ji.id
 		left join (
 			select issue, sum(numbervalue) as sum70
 				from customfieldvalue 
@@ -67,12 +70,13 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (
 
 #Timestamps of estimate updates
 drop temporary table if exists ENO_estimateStamps;
-CREATE TEMPORARY TABLE IF NOT EXISTS ENO_estimateStamps AS (select ji.id, ji.pkey, ji.summary, q1.*, q2.maxStamp50, q2.NEWSTRING as latest50, q3.maxStamp70, q3.NEWSTRING as latest70 from jiraissue ji left join (
-	select issueid, author, max(created) as maxStampStoryPoints, NEWSTRING from changegroup 
-		inner join changeitem on changegroup.id = changeitem.groupid
-		where field = 'Story Points'
-		group by issueid
-		order by issueid, created ) as q1 on ji.id = q1.issueid
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_estimateStamps AS (select ji.id, ji.pkey, ji.summary, q1.*, q2.maxStamp50, q2.NEWSTRING as latest50, q3.maxStamp70, q3.NEWSTRING as latest70 from jiraissue ji 
+	left join (
+		select issueid, author, max(created) as maxStampStoryPoints, NEWSTRING from changegroup 
+			inner join changeitem on changegroup.id = changeitem.groupid
+			where field = 'Story Points'
+			group by issueid
+			order by issueid, created ) as q1 on ji.id = q1.issueid
 	left join (
 		select issueid, author, max(created) as maxStamp50, NEWSTRING from changegroup
 			inner join changeitem on changegroup.id = changeitem.groupid
@@ -198,6 +202,7 @@ create table if not exists ENO_kpi_all as (select
        e.pname as 'Status', 
        group_concat(e.Team separator ', ') as 'Team(s)',
        e.solutionarchitect as SolutionArchitect,
+	   e.bse as bse,
 	   e.Bucket as Bucket,
 	   elabels.labels as 'Labels',
 	   e.onHold as 'On Hold',
@@ -275,7 +280,7 @@ update ENO_kpi_all ki
 	set ki.bestEstimateTotal = ki.bestEstimate 
 	where ki.bestEstimateOverhead is null;
 
-select * from ENO_kpi_all where `Sum of 50%` is not null;
+
 
 select * from ENO_kpi_all limit 10000;
 
@@ -469,7 +474,7 @@ UPDATE ENO_worklists wl
         wl.actionholder = 'Rob Perfors'
 	WHERE
 		wl.sprintassignment in (select * from ENO_pastsprints) 
-        and wl.status in ('Open', 'Specification', 'Preparing', 'Plan', 'Ready', 'In Progress')
+        and wl.status in ('Plan', 'In Progress')
 		and wl.onhold is null
 ;
 
@@ -491,6 +496,16 @@ UPDATE ENO_worklists wl
 		wl.sprintassignment = 'No Sprint'
         and wl.status = 'Open'
 		and wl.priority is null
+		and wl.onhold is null
+;
+
+UPDATE ENO_worklists wl
+	SET wl.workitem = 'Historic sprint, still in backlog',
+		wl.priority = 'Warning',
+        wl.actionholder = 'Jano Masarovic'
+	WHERE
+		wl.sprintassignment in (select * from ENO_pastsprints) 
+        and wl.status in ('Open', 'Specification', 'Preparing', 'Ready')
 		and wl.onhold is null
 ;
 

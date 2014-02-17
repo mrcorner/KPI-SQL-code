@@ -32,9 +32,9 @@ explain select ji.id,
 
 select * from label;
 
-select * from customfield where cfname like "%abel%";
+select * from customfield where cfname like "%A Rea%";
 
-select * from customfieldvalue where customfield = 10113;
+select * from customfieldvalue where customfield = 10114;
 
 select ji.id, ji.pkey, group_concat(label.label separator ', ') as labels from jiraissue ji left join label  on ji.id = label.issue
 	where ji.project = 10002 and ji.issuetype = 5
@@ -86,3 +86,9 @@ select fv.id, projectversion.vname from (select ji.id, max(projectversion.id) as
 	and ji.id = 32665) as fv inner join projectversion on fv.maxpvid = projectversion.id
 ;
 
+#20140124
+
+select * from ENO_kpi_all;
+select ki.*, ct.overhead * ki.`Sum of 50%` as corrected50 from ENO_kpi_all ki left join calendar_table ct on ct.dt = max(date(ki.created), date(ki.`Timestamp 50%`)) where ki.`Sum of 50%`is not null;
+
+select overhead from calendar_table where dt = date(now());

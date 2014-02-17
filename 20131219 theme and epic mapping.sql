@@ -46,16 +46,6 @@ select jithemes.id,
 	where issuelink.linktype = 10000 #parent links
 	
 	order by jithemes.id
-	;
+	limit 10000
+;
 
-select * from jiraissue	left join (select cv.issue, cv.stringvalue as nwp from customfieldvalue cv 
-					where cv.customfield = 10546) 
-				as nwp on nwp.issue = jiraissue.id where nwp is not null;
-
-select * from issuetype;
-select * from issuelink;
-select * from issuelinktype;
-select * from customfieldoption ;
-select * from customfield where cfname like '%abel%';
-
-select * from customfieldvalue cv where cv.customfield = 10076;
