@@ -25,7 +25,8 @@ CREATE TEMPORARY TABLE IF NOT EXISTS ENO_issueEstimates AS (
 		sumseventy.sum70, 
 		storypoints.numbervalue as storypoints, 
 		solutionarchitect.stringvalue as solutionarchitect,
-		bse.stringvalue as bse
+		bse.stringvalue as bse,
+		ji.reporter as reporter
 	from (
 		jiraissue ji left join (
 			select * from customfieldvalue where customfield = 10002) storypoints on storypoints.issue = ji.id
@@ -203,6 +204,7 @@ create table if not exists ENO_kpi_all as (select
        group_concat(e.Team separator ', ') as 'Team(s)',
        e.solutionarchitect as SolutionArchitect,
 	   e.bse as bse,
+	   e.reporter as reporter,
 	   e.Bucket as Bucket,
 	   elabels.labels as 'Labels',
 	   e.onHold as 'On Hold',
@@ -234,7 +236,31 @@ create table if not exists ENO_kpi_all as (select
 	   eresolved.toresolve as 'Resolved date',
 	   CONCAT(YEAR(eresolved.toresolve), ".", WEEKOFYEAR(eresolved.toresolve)) as weekToResolve,
 	   eclosed.toclose as 'Closed date',
-	   CONCAT(YEAR(eclosed.toclose), ".", WEEKOFYEAR(eclosed.toclose)) as weekToClose
+	   CONCAT(YEAR(eclosed.toclose), ".", WEEKOFYEAR(eclosed.toclose)) as weekToClose,
+	   eDetail.50_SAP,
+	   eDetail.50_Tibco,
+	   eDetail.50_EOL,
+	   eDetail.50_MPR,
+	   eDetail.50_Streamserve,
+	   eDetail.50_BI,
+	   eDetail.50_Testing,
+	   eDetail.50_Documentum,
+	   eDetail.50_EDSN,
+	   eDetail.50_RMS,
+	   eDetail.50_TEP,
+	   eDetail.50_Other,
+	   eDetail.70_SAP,
+	   eDetail.70_Tibco,
+	   eDetail.70_EOL,
+	   eDetail.70_MPR,
+	   eDetail.70_Streamserve,
+	   eDetail.70_BI,
+	   eDetail.70_Testing,
+	   eDetail.70_Documentum,
+	   eDetail.70_EDSN,
+	   eDetail.70_RMS,
+	   eDetail.70_TEP,
+	   eDetail.70_Other
 	from ENO_issueEstimates e 
 		inner join ENO_estimateStamps s 
 		on e.id = s.id 
@@ -245,7 +271,8 @@ create table if not exists ENO_kpi_all as (select
 		left join ENO_endreadyphase eready on e.id = eready.id
 		left join ENO_toresolve eresolved on e.id = eresolved.id
 		left join ENO_toclose eclosed on e.id = eclosed.id
-		left join ENO_issuelabels elabels on e.id = elabels.id		
+		left join ENO_issuelabels elabels on e.id = elabels.id	
+		left join ENO_estimatesDetail eDetail on e.id = eDetail.id
 	#where demandfix is null
 	#and e.pname != "Closed" and e.pname != "Resolved" and e.pname != "Open" and e.pname != "Regression Test"
 	#where planfix = "Sprint 55"
@@ -283,6 +310,7 @@ update ENO_kpi_all ki
 
 
 select * from ENO_kpi_all limit 10000;
+
 
 drop table if exists ENO_worklists;
 create table if not exists ENO_worklists as (
