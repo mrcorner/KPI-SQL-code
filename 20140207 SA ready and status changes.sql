@@ -140,7 +140,7 @@ select
 	"NVT") as historicDue, 
 	dr.endready as ActualReady,
 	CONCAT(YEAR(dr.endready), ".", WEEKOFYEAR(dr.endready)) as weekActualReady,
-	tp.timesinprep
+	cast(tp.timesinprep AS UNSIGNED) as timesinprep
 from jiraissue ji
 	inner join issuestatus on ji.issuestatus = issuestatus.id
 	left join (
