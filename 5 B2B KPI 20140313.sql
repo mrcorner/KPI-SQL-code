@@ -190,17 +190,17 @@ UPDATE ENO_B2Bmaster wl
 		and wl.onhold is null
 ;
 
-
-UPDATE ENO_B2Bmaster wl
-	SET wl.workitem = 'No SA assigned, status > Preparing',
-		wl.priority = 'High',
-        wl.actionholder = 'Tim Verstegen'
-	WHERE
-		wl.SolutionArchitect is null
-        and wl.status in ('Ready', 'Plan', 'In Progress', 'Regression Test', 'Ready for P')
-		and wl.priority is null
-		and wl.onhold is null
-;
+#20140414 removed on Tim's request
+#UPDATE ENO_B2Bmaster wl
+#	SET wl.workitem = 'No SA assigned, status > Preparing',
+#		wl.priority = 'High',
+#       wl.actionholder = 'Tim Verstegen'
+#	WHERE
+#		wl.SolutionArchitect is null
+#        and wl.status in ('Ready', 'Plan', 'In Progress', 'Regression Test', 'Ready for P')
+#		and wl.priority is null
+#		and wl.onhold is null
+#;
 
 UPDATE ENO_B2Bmaster wl
 	SET wl.workitem = 'No 70% estimate, status > Preparing',
@@ -237,7 +237,7 @@ UPDATE ENO_B2Bmaster wl
 ;
 
 UPDATE ENO_B2Bmaster wl
-	SET wl.workitem = 'No Sprint filled, status = Preparing',
+	SET wl.workitem = 'No Sprint filled, status = Open',
 		wl.priority = 'Low',
         wl.actionholder = 'Sander Timmers'
 	WHERE

@@ -1,3 +1,6 @@
+#20140404 add jira sanity check for resolve and ready P
+
+
 select now() as starttime;
 
 #******************************************************************************************************
@@ -645,6 +648,18 @@ select issueid, max(created) as endready, OLDSTRING, NEWSTRING from changegroup
 	order by issueid ) as q1 on ji.id = q1.issueid
 	where ji.issuetype = 5 and ji.project = 10002);
 
+drop temporary table if exists ENO_endinprogressphase;
+CREATE TEMPORARY TABLE IF NOT EXISTS ENO_endinprogressphase AS (select ji.id, q1.* from jiraissue ji inner join (
+select issueid, max(created) as endprogress, OLDSTRING, NEWSTRING from changegroup 
+	inner join changeitem on changegroup.id = changeitem.groupid
+	where field = 'status' 
+	and OLDSTRING = 'In Progress'
+	and NEWSTRING = 'Regression Test'
+	#group by issueid, newvalue
+	group by issueid
+	order by issueid ) as q1 on ji.id = q1.issueid
+	where ji.issuetype = 5 and ji.project = 10002);
+
 drop temporary table if exists ENO_toresolve;
 CREATE TEMPORARY TABLE IF NOT EXISTS ENO_toresolve AS (select ji.id, q1.* from jiraissue ji inner join (
 select issueid, max(created) as toresolve, OLDSTRING, NEWSTRING from changegroup 
@@ -714,6 +729,8 @@ create table if not exists ENO_kpi_all as (select
 	   CONCAT(YEAR(eprep.endprep), ".", WEEKOFYEAR(eprep.endprep)) as weekEndPrep,
 	   eready.endready as 'End of Ready',
        CONCAT(YEAR(eready.endready), ".", WEEKOFYEAR(eready.endready)) as weekEndReady,
+	   eprogress.endprogress as 'End In Progress',
+	   CONCAT(YEAR(eprogress.endprogress), ".", WEEKOFYEAR(eprogress.endprogress)) as weekEndProgress, 	
 	   eresolved.toresolve as 'Resolved date',
 	   CONCAT(YEAR(eresolved.toresolve), ".", WEEKOFYEAR(eresolved.toresolve)) as weekToResolve,
 	   eclosed.toclose as 'Closed date',
@@ -750,6 +767,7 @@ create table if not exists ENO_kpi_all as (select
 		left join ENO_endspecphase espec on e.id = espec.id
 		left join ENO_endprepphase eprep on e.id = eprep.id
 		left join ENO_endreadyphase eready on e.id = eready.id
+		left join ENO_endinprogressphase eprogress on e.id = eprogress.id
 		left join ENO_toresolve eresolved on e.id = eresolved.id
 		left join ENO_toclose eclosed on e.id = eclosed.id
 		left join ENO_issuelabels elabels on e.id = elabels.id	
@@ -1010,6 +1028,16 @@ UPDATE ENO_worklists wl
 ;
 
 UPDATE ENO_worklists wl
+	SET wl.workitem = 'Historic sprint, not fully closed',
+		wl.priority = 'Low',
+        wl.actionholder = 'Rob Perfors'
+	WHERE
+		wl.sprintassignment in (select * from ENO_pastsprints) 
+        and wl.status in ('Ready for P', 'Resolved')
+		and wl.onhold is null
+;
+
+UPDATE ENO_worklists wl
 	SET wl.workitem = 'ON HOLD and status > Preparing',
 		wl.priority = 'Low',
         wl.actionholder = 'Niels Wolf'
@@ -1068,11 +1096,14 @@ UPDATE ENO_worklists wl
 select * from ENO_worklists where workitem is not null;
 select * from ENO_worklists limit 10000;
 
+describe ENO_kpi_all;
+
 drop table if exists ENO_voorraad;
 CREATE TEMPORARY TABLE IF NOT EXISTS ENO_voorraad AS (
 select 
-	   kpiall.epic,
+	   kpiall.`Epic`,
 	   kpiall.`Status`,
+	   kpiall.`On Hold`,
 	   (IFNULL(ed.50_SAP,0) 
 		+ IFNULL(ed.50_Tibco,0) 
 		+ IFNULL(ed.50_EOL,0) 
@@ -1095,11 +1126,18 @@ select
 		+ IFNULL(ed.70_EDSN,0)
 		+ IFNULL(ed.70_RMS,0) 
 		+ IFNULL(ed.70_TEP,0)) as Sum70TeamEffort,
+		kpiall.`Story Points`,
 		kpiall.weekEndSpec,
+		kpiall.`End of Specification`,
 		kpiall.weekEndPrep,
+		kpiall.`End of Preparation`,
+		kpiall.weekEndProgress,
+		kpiall.`End In Progress`,
+		kpiall.`Sprint assignment`,
 	ed.*
 	from ENO_kpi_all kpiall inner join ENO_estimatesDetail ed on kpiall.id = ed.id);
 select * from ENO_voorraad limit 10000;
+
 
 
 #********************************************************************************************************
